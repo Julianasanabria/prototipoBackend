@@ -7,11 +7,10 @@ const app = express();
 
 connectDB();
 
-// Middleware de seguridad
-app.use(securityMiddleware);
-app.use(rateLimitSimple(200, 15 * 60 * 1000)); // 200 solicitudes por 15 minutos
 
-// Configuración CORS dinámica para desarrollo y producción
+app.use(securityMiddleware);
+app.use(rateLimitSimple(200, 15 * 60 * 1000)); 
+
 const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
@@ -20,7 +19,7 @@ const allowedOrigins = [
 ];
 
 if (process.env.FRONTEND_URL) {
-    // Limpiar posibles espacios o barras finales
+    
     const frontendUrl = process.env.FRONTEND_URL.trim().replace(/\/$/, "");
     allowedOrigins.push(frontendUrl);
 }
@@ -67,13 +66,12 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
-// Solo escuchar si no estamos en Vercel (opcional pero recomendado)
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`Servidor corriendo en puerto ${PORT}`);
-        console.log(`Health check: http://localhost:${PORT}/health`);
-    });
-}
+// Escuchar peticiones (esencial para Render, local y otros)
+// Vercel ignora esto al importar el módulo, así que es seguro dejarlo
+app.listen(PORT, () => {
+    console.log(`Servidor corriendo en puerto ${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/health`);
+});
 
 module.exports = app;
 
