@@ -19,22 +19,28 @@ const allowedOrigins = [
     'http://localhost:5173'
 ];
 
-// Añadir URL de producción si existe
 if (process.env.FRONTEND_URL) {
-    allowedOrigins.push(process.env.FRONTEND_URL);
+    // Limpiar posibles espacios o barras finales
+    const frontendUrl = process.env.FRONTEND_URL.trim().replace(/\/$/, "");
+    allowedOrigins.push(frontendUrl);
 }
 
 app.use(cors({
     origin: function (origin, callback) {
         // Permitir solicitudes sin origen (como apps móviles o curl)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+
+        // Limpiar el origen entrante para comparar
+        const cleanOrigin = origin.trim().replace(/\/$/, "");
+
+        if (allowedOrigins.includes(cleanOrigin) || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
+            console.log('Bloqueado por CORS:', origin);
             callback(new Error('No permitido por CORS'));
         }
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }));
@@ -54,10 +60,20 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Root endpoint para evitar error "Cannot GET /"
+app.get('/', (req, res) => {
+    res.send('Backend del Prototipo Hotel corriendo correctamente.');
+});
+
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/health`);
-});
+// Solo escuchar si no estamos en Vercel (opcional pero recomendado)
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Servidor corriendo en puerto ${PORT}`);
+        console.log(`Health check: http://localhost:${PORT}/health`);
+    });
+}
+
+module.exports = app;
 
