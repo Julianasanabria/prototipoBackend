@@ -16,9 +16,7 @@ const semillaDatos = async () => {
         await TipoHabitacion.deleteMany({});
         await Habitacion.deleteMany({});
 
-        // Tipos de habitación
         const tiposHabitacion = [
-            // Económicas
             { nombre: 'Habitación Compartida (litera)', precioBase: 30000, capacidad: 1, permiteMascotas: false, caracteristicas: ['Cama litera', 'Baño compartido', 'WiFi'], categoria: 'Económica' },
             { nombre: 'Individual Básica', precioBase: 45000, capacidad: 1, permiteMascotas: false, caracteristicas: ['Cama sencilla', 'Baño privado', 'WiFi'], categoria: 'Económica' },
             { nombre: 'Doble Económica', precioBase: 60000, capacidad: 2, permiteMascotas: false, caracteristicas: ['Cama doble', 'Baño privado', 'TV', 'WiFi'], categoria: 'Económica' },
@@ -41,12 +39,10 @@ const semillaDatos = async () => {
         const tiposInsertados = await TipoHabitacion.insertMany(tiposHabitacion);
         console.log('Tipos de habitación insertados');
 
-        // Generar instancias de habitaciones físicas (Inventario)
         const habitacionesFisicas = [];
         let contador = 101;
 
         tiposInsertados.forEach(tipo => {
-            // Creamos 3 habitaciones de cada tipo como inventario inicial
             for (let i = 0; i < 3; i++) {
                 habitacionesFisicas.push({
                     numero: `${contador++}`,
@@ -59,14 +55,13 @@ const semillaDatos = async () => {
         await Habitacion.insertMany(habitacionesFisicas);
         console.log(`Inventario creado: ${habitacionesFisicas.length} habitaciones físicas insertadas.`);
 
-        // Nodos de conversación
         const nodosChat = [
             {
                 id: 'bienvenida',
-                mensaje: "🏨 **Hotel de Villa de Leyva**\n\n¡Bienvenido! Nos alegra que nos elijas en el corazón del pueblo más hermoso de Boyacá.\n\n**¿Qué deseas hacer?**",
+                mensaje: "✨ **¡Bienvenido a tu escape mágico en Villa de Leyva!** ✨\n\nNos encanta saludarte. Estás a un paso de vivir una experiencia exclusiva en el corazón colonial más hermoso de Colombia. 🏰☕\n\n**¿Estás listo para asegurar tu lugar con nosotros?**",
                 tipo: 'payment_selection',
                 opciones: [
-                    { etiqueta: "Hacer una reserva ✅", valor: "1", siguiente_id: "preguntar_fechas" }
+                    { etiqueta: "Sí, quiero reservar ✅", valor: "1", siguiente_id: "preguntar_fechas" }
                 ]
             },
             {
@@ -92,11 +87,11 @@ const semillaDatos = async () => {
             },
             {
                 id: 'preguntar_mascotas',
-                mensaje: "🐾 **¿Viajas con Mascotas?**",
+                mensaje: "🐾 **¿Vienes con tu mejor amigo?**\n\nEn nuestro hotel amamos a los peluditos tanto como tú. Somos orgullosamente **Pet-Friendly** y tenemos espacios diseñados para que ellos también disfruten del encanto de Villa de Leyva. 🐕✨\n\n**¿Viajan con mascotas?**",
                 tipo: 'payment_selection',
                 opciones: [
-                    { etiqueta: "No", valor: "no", siguiente_id: "preguntar_habitaciones" },
-                    { etiqueta: "Sí", valor: "yes", siguiente_id: "preguntar_cantidad_mascotas" }
+                    { etiqueta: "No, viajamos solos", valor: "no", siguiente_id: "preguntar_habitaciones" },
+                    { etiqueta: "Sí, venimos con mascota 🐕", valor: "yes", siguiente_id: "preguntar_cantidad_mascotas" }
                 ]
             },
             {
@@ -142,13 +137,13 @@ const semillaDatos = async () => {
             },
             {
                 id: 'preguntar_plan_alimentacion',
-                mensaje: "🍽️ **Plan Alimentación**\n\n⭐ **El desayuno ya está incluido en todas nuestras habitaciones**\n\n¿Deseas agregar algún plan adicional?\n1. Solo desayuno (incluido) - $0\n2. Desayuno + Almuerzo ($25,000 por persona/noche)\n3. Desayuno + Almuerzo + Cena ($35,000 por persona/noche)\n\nResponde con el número de tu opción (1-3)",
+                mensaje: "🍽️ **Plan de Alimentación**\n\n⭐ **El desayuno buffet ya está incluido** para que empieces el día con energía.\n\nEl **90% de nuestros huéspedes** eligen el *Plan Completo* para disfrutar de nuestra deliciosa sazón casera sin preocuparse de nada.\n\n¿Deseas agregar algún plan adicional?",
                 tipo: 'payment_selection',
                 variable: 'planAlimentacion',
                 opciones: [
-                    { etiqueta: "1", valor: "solo_desayuno", siguiente_id: "preguntar_nombre" },
-                    { etiqueta: "2", valor: "desayuno_almuerzo", siguiente_id: "preguntar_nombre" },
-                    { etiqueta: "3", valor: "completo", siguiente_id: "preguntar_nombre" }
+                    { etiqueta: "Solo desayuno (Lo esencial) ☕", valor: "solo_desayuno", siguiente_id: "preguntar_nombre" },
+                    { etiqueta: "Desayuno + Almuerzo (¡Ideal para recorrer!) 🍛", valor: "desayuno_almuerzo", siguiente_id: "preguntar_nombre" },
+                    { etiqueta: "Plan Gourmet Completo ⭐", valor: "completo", siguiente_id: "preguntar_nombre" }
                 ]
             },
             {
@@ -175,7 +170,7 @@ const semillaDatos = async () => {
 
             {
                 id: 'mostrar_resumen',
-                mensaje: "📋 **RESUMEN DE TU RESERVA**\n\n**👤 DATOS PERSONALES**\nNombre: {nombreUsuario}\nTeléfono: {telefonoUsuario}\nCorreo: {correoUsuario}\n\n**🏨 DETALLES**\nFechas: {startDate} al {endDate}\nPersonas: {totalPeople} ({peopleBreakdown})\nMascotas: {hasPetsStatus}\nHabitación: {roomType}\nNoches: {noches}\nPlan: {mealPlanName}\n\n**💰 COSTOS**\n• Habitación: ${roomPricePerNight} x {noches} noches = ${roomTotal}\n• Alimentación: {mealPlanCost}\n• Mascotas: {petCost}\n• **Total: {totalPrice}**\n\n**💳 Método de Pago** (selecciona abajo) Nequi 💚 \n\n Bancolombia 💙\n\n Daviplata 💛\n\n Banco Mundo Mujer 💜\n\n Tarjeta de crédito/débito 💳\n\nPara cambios: 312 345 6789",
+                mensaje: "📋 **RESUMEN DE TU RESERVA**\n\n**👤 HUESPED**: {nombreUsuario}\n📞 {telefonoUsuario} | 📧 {correoUsuario}\n\n**🏨 ESTANCIA**\n📅 {startDate} al {endDate} ({noches} noches)\n👥 {totalPeople} personas ({peopleBreakdown})\n🐾 Mascotas: {hasPetsStatus}\n🏠 **{roomType}**\n🍽️ Plan: {mealPlanName}\n\n**💰 DESGLOSE**\n• Habitación: {roomTotal}\n• Alimentación: {mealPlanCost}\n• Mascotas: {petCost}\n\n✨ **TOTAL A PAGAR: {totalPrice}**\n\n--- \n💳 **¿Cómo deseas realizar tu pago?**",
                 tipo: 'payment_selection',
                 variable: 'metodoPago',
                 opciones: [
@@ -198,7 +193,7 @@ const semillaDatos = async () => {
             },
             {
                 id: 'confirmar_reserva',
-                mensaje: "🎉 **RESERVA CONFIRMADA**\n\n¡Gracias por elegir Hotel de Villa de Leyva!\nNos encanta recibirte en nuestro hermoso pueblo colonial.\n\n**📄 DETALLES FINALES**\nNombre: {nombreUsuario}\nTeléfono: {telefonoUsuario}\nCorreo: {correoUsuario}\nIngreso: {startDate}\nSalida: {endDate}\nPersonas: {totalPeople} ({peopleBreakdown})\nMascotas: {hasPetsStatus}\nHabitación: {selectedOptionName}\nPlan: {mealPlanName}\n\n**🏨 SERVICIOS INCLUIDOS**\n• 🍳 Desayuno buffet incluido\n• WiFi en todas las áreas\n• Acceso a áreas comunes\n• Atención 24 horas\n• {additionalServices}\n\n**🌟 ¡Te esperamos el {startDate}!**\n\nPara cualquier cambio o modificación, contáctanos al **312 345 6789**",
+                mensaje: "🎉 **RESERVA CONFIRMADA**\n\n¡Gracias por elegirnos! Tu rincón en Villa de Leyva te espera. 🏰✨\n\n**📄 COMPROBANTE DE RESERVA**\n🆔 Habitación(es): **{roomNumbers}**\n📍 Tipo: {roomType}\n👤 Titular: {nombreUsuario}\n📅 Estancia: {startDate} al {endDate}\n👥 Ocupantes: {totalPeople}\n🍽️ {mealPlanName}\n\n**🏨 TU ESTANCIA INCLUYE**\n• 🍳 Desayuno buffet artesanal\n• WiFi de alta velocidad\n• Acceso a todas las áreas comunes\n• {additionalServices}\n\n🌟 **¡Te esperamos el {startDate}!**",
                 tipo: 'static'
             }
         ];

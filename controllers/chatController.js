@@ -3,19 +3,11 @@ const Reserva = require('../models/Reservation');
 const TipoHabitacion = require('../models/RoomType');
 const Habitacion = require('../models/Habitacion');
 
-/**
- * Obtiene el conteo de habitaciones disponibles por tipo para un rango de fechas
- * @param {Date} inicio - Fecha de inicio
- * @param {Date} fin - Fecha de fin
- * @returns {Object} Map de { tipoId: count }
- */
 const obtenerInventarioDisponible = async (inicio, fin) => {
-    // 1. Obtener todas las habitaciones física que NO estén fuera de servicio o en mantenimiento
     const habitacionesActivas = await Habitacion.find({
         estado: { $in: ['disponible', 'ocupada'] } // 'ocupada' se incluye porque puede desocuparse
     }).lean();
 
-    // 2. Obtener reservas confirmadas que se solapan con estas fechas
     const reservasSolapadas = await Reserva.find({
         estado: 'confirmada',
         $or: [
@@ -25,7 +17,6 @@ const obtenerInventarioDisponible = async (inicio, fin) => {
         ]
     }).lean();
 
-    // 3. Identificar habitaciones IDs ocupadas en esas fechas
     const idsHabitacionesOcupadas = new Set();
     reservasSolapadas.forEach(res => {
         if (res.habitacionesAsignadas) {
@@ -33,10 +24,9 @@ const obtenerInventarioDisponible = async (inicio, fin) => {
         }
     });
 
-    // 4. Contar disponibles por tipo
     const inventario = {};
     habitacionesActivas.forEach(hab => {
-        if (!idsHabitacionesOcupadas.has(hab._id.toString()) && hab.estado === 'disponible') {
+        if (!idsHabitacionesOcupadas.has(hab._id.toString())) {
             const tipoId = hab.tipo.toString();
             inventario[tipoId] = (inventario[tipoId] || 0) + 1;
         }
@@ -74,7 +64,6 @@ const respuestaChat = ({ mensaje, idPasoActual, tipo, opciones, ...resto }) => {
     };
 };
 
-// Función para calcular noches entre fechas
 const calcularNoches = (rangoFechasStr) => {
     try {
         const [inicioStr, finStr] = rangoFechasStr.split('-').map(s => s.trim());
@@ -88,22 +77,12 @@ const calcularNoches = (rangoFechasStr) => {
     }
 };
 
-/**
- * Genera combinaciones de habitaciones para múltiples habitaciones
- * @param {Array} habitaciones - Array de tipos de habitaciones disponibles
- * @param {Number} numPersonas - Número total de personas
- * @param {Number} numHabitaciones - Número de habitaciones solicitadas
- * @param {Boolean} tieneMascotas - Si requiere habitaciones que permitan mascotas
- * @param {Object} inventario - Map de { tipoId: count } con disponibilidad real
- * @returns {Array} Array de combinaciones válidas
- */
 const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaciones, tieneMascotas, inventario = {}) => {
     const combinaciones = [];
 
     // Filtrar tipos que no tienen disponibilidad en el inventario
     const habitacionesConStock = habitaciones.filter(h => (inventario[h._id.toString()] || 0) > 0);
 
-    // Caso 1: Una sola habitación - retornar habitaciones individuales
     if (numHabitaciones === 1) {
         return habitacionesConStock
             .filter(h => h.capacidad >= numPersonas)
@@ -115,8 +94,6 @@ const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaci
             }));
     }
 
-    // Caso 2: Múltiples habitaciones - generar combinaciones
-    // Estrategia 1: Combinaciones homogéneas (todas del mismo tipo)
     habitacionesConStock.forEach(tipoHab => {
         const stockDisponible = inventario[tipoHab._id.toString()] || 0;
         if (stockDisponible >= numHabitaciones) {
@@ -134,7 +111,6 @@ const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaci
         }
     });
 
-    // Estrategia 2: Combinaciones mixtas (2 tipos diferentes)
     if (numHabitaciones >= 2) {
         for (let i = 0; i < habitacionesConStock.length; i++) {
             for (let j = i + 1; j < habitacionesConStock.length; j++) {
@@ -143,7 +119,6 @@ const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaci
                 const stock1 = inventario[tipo1._id.toString()] || 0;
                 const stock2 = inventario[tipo2._id.toString()] || 0;
 
-                // Probar diferentes distribuciones
                 for (let cant1 = 1; cant1 < numHabitaciones; cant1++) {
                     const cant2 = numHabitaciones - cant1;
 
@@ -169,7 +144,6 @@ const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaci
         }
     }
 
-    // Estrategia 3: Combinaciones de 3 tipos (solo para 3+ habitaciones)
     if (numHabitaciones >= 3 && habitacionesConStock.length >= 3) {
         for (let i = 0; i < habitacionesConStock.length; i++) {
             for (let j = i + 1; j < habitacionesConStock.length; j++) {
@@ -181,7 +155,6 @@ const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaci
                     const stock2 = inventario[tipo2._id.toString()] || 0;
                     const stock3 = inventario[tipo3._id.toString()] || 0;
 
-                    // Solo probar 1 de cada tipo si numHabitaciones === 3
                     if (numHabitaciones === 3) {
                         if (stock1 >= 1 && stock2 >= 1 && stock3 >= 1) {
                             const capacidadTotal = tipo1.capacidad + tipo2.capacidad + tipo3.capacidad;
@@ -206,7 +179,6 @@ const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaci
         }
     }
 
-    // Filtrar duplicados y ordenar por precio
     const combinacionesUnicas = [];
     const vistos = new Set();
 
@@ -223,22 +195,18 @@ const generarCombinacionesHabitaciones = (habitaciones, numPersonas, numHabitaci
         }
     });
 
-    // Ordenar por precio (más económicas primero)
     combinacionesUnicas.sort((a, b) => a.precioTotal - b.precioTotal);
 
-    // Limitar a máximo 15 opciones
     return combinacionesUnicas.slice(0, 15);
 };
 
 
-// Procesar mensaje del usuario
 exports.manejarMensaje = async (req, res) => {
     let { idSesion, entradaUsuario } = req.body;
 
     try {
         let reserva = await Reserva.findOne({ idSesionUsuario: idSesion });
 
-        // Crear nueva sesión si no existe
         if (!reserva) {
             reserva = new Reserva({ idSesionUsuario: idSesion, idPasoActual: 'bienvenida' });
             await reserva.save();
@@ -263,7 +231,6 @@ exports.manejarMensaje = async (req, res) => {
 
         const pasoActual = await ChatPaso.findOne({ id: reserva.idPasoActual });
 
-        // Validar que el paso actual exista
         if (!pasoActual) {
             return res.status(400).json(respuestaChat({
                 error: 'Paso no encontrado',
@@ -274,7 +241,6 @@ exports.manejarMensaje = async (req, res) => {
             }));
         }
 
-        // Si entrada está vacía y estamos al inicio
         if (!entradaUsuario && reserva.idPasoActual === 'bienvenida') {
             return res.json(respuestaChat({
                 mensaje: pasoActual.mensaje,
@@ -284,7 +250,6 @@ exports.manejarMensaje = async (req, res) => {
             }));
         }
 
-        // Validar que no se intente saltar a un paso no permitido
         if (entradaUsuario && entradaUsuario.includes('siguiente_id')) {
             return res.json(respuestaChat({
                 mensaje: "❌ **Acceso no permitido**\n\nPor favor sigue el flujo normal de la conversación.",
@@ -296,21 +261,16 @@ exports.manejarMensaje = async (req, res) => {
 
         let idSiguiente = pasoActual.siguiente_id;
 
-        // Selección de habitación desde dynamic_options (PAGINACIÓN)
         if (pasoActual.id === 'mostrar_opciones' && reserva.opcionesSimuladas) {
 
-            // Manejar navegación
             if (entradaUsuario === 'siguiente_opcion') {
                 reserva.indiceOpcionActual = (reserva.indiceOpcionActual || 0) + 1;
-                // El límite se valida en la generación de respuesta, pero por seguridad:
                 const totalOpciones = Object.keys(reserva.opcionesSimuladas).length;
-                if (reserva.indiceOpcionActual >= totalOpciones) reserva.indiceOpcionActual = 0; // Ciclar o tope
+                if (reserva.indiceOpcionActual >= totalOpciones) reserva.indiceOpcionActual = 0;
 
                 await reserva.save();
-                // IMPORTANTE: No retornar recursivamente.
-                // Simplemente establecemos el siguiente paso como el ACTUAL para que se regenere la vista
                 idSiguiente = pasoActual.id;
-                entradaUsuario = null; // Limpiar para evitar doble procesamiento
+                entradaUsuario = null;
             } else if (entradaUsuario === 'anterior_opcion') {
                 reserva.indiceOpcionActual = (reserva.indiceOpcionActual || 0) - 1;
                 if (reserva.indiceOpcionActual < 0) reserva.indiceOpcionActual = 0;
@@ -319,9 +279,6 @@ exports.manejarMensaje = async (req, res) => {
                 idSiguiente = pasoActual.id;
                 entradaUsuario = null;
             } else if (entradaUsuario === '1') {
-                // Obtener la opción actual basada en el índice
-                // Nota: opcionesSimuladas ahora debería ser un array o objeto indexado
-                // Por compatibilidad con la estructura anterior, usaremos el índice + 1 como clave string
                 const indice = (reserva.indiceOpcionActual || 0) + 1;
                 const opcionValida = reserva.opcionesSimuladas[indice.toString()];
 
@@ -329,7 +286,6 @@ exports.manejarMensaje = async (req, res) => {
                     if (Array.isArray(opcionValida)) {
                         reserva.habitacionesElegidas = opcionValida;
                     } else {
-                        // Fallback logic
                         const habitacionDoc = await TipoHabitacion.findById(opcionValida).lean();
                         if (habitacionDoc) {
                             reserva.habitacionesElegidas = [{
@@ -344,31 +300,26 @@ exports.manejarMensaje = async (req, res) => {
                     }
                     idSiguiente = 'preguntar_plan_alimentacion';
                 } else {
-                    // Error fallback
-                    idSiguiente = 'mostrar_opciones'; // Quedarse aquí
+                    idSiguiente = 'mostrar_opciones';
                 }
             } else if (entradaUsuario === '2') {
-                // Cancelar / Cambiar búsqueda
                 idSiguiente = 'preguntar_habitaciones';
             } else {
-                // Entrada no válida
                 return res.json(respuestaChat({
                     mensaje: "❌ Opción no válida. Por favor usa los botones disponibles.",
                     idPasoActual: pasoActual.id,
                     tipo: 'dynamic_options',
-                    opciones: [] // Se regenerarán
+                    opciones: []
                 }));
             }
         }
 
-        // Validar opciones
         if (pasoActual.opciones && pasoActual.opciones.length > 0) {
             const opcionSeleccionada = pasoActual.opciones.find(o => o.etiqueta === entradaUsuario || o.valor === entradaUsuario);
             if (opcionSeleccionada) {
                 idSiguiente = opcionSeleccionada.siguiente_id;
                 reserva.erroresConsecutivos = 0;
 
-                // Guardar variables especiales
                 if (pasoActual.id === 'preguntar_mascotas') {
                     reserva.tieneMascotas = opcionSeleccionada.valor === 'yes';
                 } else if (pasoActual.id === 'preguntar_plan_alimentacion') {
@@ -378,8 +329,6 @@ exports.manejarMensaje = async (req, res) => {
                 } else if (pasoActual.id === 'preguntar_cantidad_mascotas') {
                     reserva.numMascotas = parseInt(opcionSeleccionada.valor);
                 } else if (pasoActual.id === 'mostrar_detalles_pago') {
-                    // Para el paso de pago, no necesitamos guardar nada especial
-                    // Solo continuamos al siguiente paso
                     idSiguiente = opcionSeleccionada.siguiente_id;
                 }
             } else {
@@ -406,7 +355,6 @@ exports.manejarMensaje = async (req, res) => {
             }
         }
 
-        // Procesar variables de entrada
         if (pasoActual.variable) {
             if (pasoActual.id === 'preguntar_fechas') {
                 const entradaStr = String(entradaUsuario || '').trim();
@@ -467,6 +415,7 @@ exports.manejarMensaje = async (req, res) => {
 
                 reserva.fechaInicio = fechaInicio;
                 reserva.fechaFin = fechaFin;
+                reserva.idPasoActual = 'preguntar_cantidad_personas';
 
             } else if (pasoActual.id === 'preguntar_cantidad_personas') {
                 const numPersonas = parseInt(entradaUsuario);
@@ -483,7 +432,6 @@ exports.manejarMensaje = async (req, res) => {
                 const adultos = entradaUsuario.match(/Adultos:\s*(\d+)/i);
                 const ninos = entradaUsuario.match(/Niños:\s*(\d+)/i);
 
-                // Validar que se ingresen ambos valores
                 if (!adultos || !ninos) {
                     return res.json(respuestaChat({
                         mensaje: "❌ **Formato inválido**\n\nPor favor ingresa ambos valores en el formato:\nAdultos: X, Niños: Y\n\nEjemplo: Adultos: 2, Niños: 1",
@@ -497,7 +445,6 @@ exports.manejarMensaje = async (req, res) => {
                 const numNinos = parseInt(ninos[1]);
                 const totalPersonas = numAdultos + numNinos;
 
-                // Validar que la suma coincida con la cantidad total ingresada anteriormente
                 if (totalPersonas !== reserva.numAdultos) {
                     return res.json(respuestaChat({
                         mensaje: `❌ **Cantidad incorrecta**\n\nLa suma de adultos (${numAdultos}) y niños (${numNinos}) es ${totalPersonas}, pero anteriormente indicaste ${reserva.numAdultos} personas.\n\nPor favor corrige la distribución para que sume ${reserva.numAdultos} personas.`,
@@ -507,7 +454,6 @@ exports.manejarMensaje = async (req, res) => {
                     }));
                 }
 
-                // Validar que haya al menos 1 adulto
                 if (numAdultos < 1) {
                     return res.json(respuestaChat({
                         mensaje: "❌ **Adultos insuficientes**\n\nDebe haber al menos 1 adulto en la reserva.\n\nPor favor ingresa una distribución válida.",
@@ -517,7 +463,6 @@ exports.manejarMensaje = async (req, res) => {
                     }));
                 }
 
-                // Validar que no sean números negativos
                 if (numAdultos < 0 || numNinos < 0) {
                     return res.json(respuestaChat({
                         mensaje: "❌ **Valores inválidos**\n\nLas cantidades no pueden ser negativas.\n\nPor favor ingresa números válidos.",
@@ -579,7 +524,6 @@ exports.manejarMensaje = async (req, res) => {
                 }
                 reserva.nombreUsuario = nombreLimpio;
             } else if (pasoActual.id === 'preguntar_telefono') {
-                // Validar teléfono colombiano (10 dígitos)
                 const regexTelefono = /^[0-9]{10}$/;
                 if (!regexTelefono.test(entradaUsuario.trim())) {
                     return res.json(respuestaChat({
@@ -591,7 +535,6 @@ exports.manejarMensaje = async (req, res) => {
                 }
                 reserva.telefonoUsuario = entradaUsuario.trim();
             } else if (pasoActual.id === 'preguntar_correo') {
-                // Validar correo electrónico
                 const regexCorreo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!regexCorreo.test(entradaUsuario.trim())) {
                     return res.json(respuestaChat({
@@ -603,7 +546,6 @@ exports.manejarMensaje = async (req, res) => {
                 }
                 reserva.correoUsuario = entradaUsuario.trim().toLowerCase();
             } else if (pasoActual.id === 'preguntar_plan_alimentacion') {
-                // Guardar el valor de la opción seleccionada, no la etiqueta
                 const opcionSeleccionada = pasoActual.opciones.find(o => o.etiqueta === entradaUsuario || o.valor === entradaUsuario);
                 if (opcionSeleccionada) {
                     reserva.planAlimentacion = opcionSeleccionada.valor;
@@ -613,7 +555,6 @@ exports.manejarMensaje = async (req, res) => {
             }
         }
 
-        // Lógica especial
         if (pasoActual.id === 'preguntar_cantidad_personas') {
             idSiguiente = 'preguntar_distribucion_personas';
         }
@@ -622,7 +563,6 @@ exports.manejarMensaje = async (req, res) => {
             idSiguiente = 'mostrar_opciones';
         }
 
-        // Validar que todos los campos obligatorios estén completos antes de mostrar resumen
         if (idSiguiente === 'mostrar_resumen') {
             const camposFaltantes = [];
 
@@ -647,7 +587,6 @@ exports.manejarMensaje = async (req, res) => {
             if (!reserva.numHabitaciones || reserva.numHabitaciones < 1) {
                 camposFaltantes.push('número de habitaciones');
             }
-            // Verificar que haya habitaciones seleccionadas (nuevo formato o antiguo)
             if ((!reserva.habitacionesElegidas || reserva.habitacionesElegidas.length === 0) && !reserva.habitacionElegida) {
                 camposFaltantes.push('selección de habitación');
             }
@@ -662,23 +601,19 @@ exports.manejarMensaje = async (req, res) => {
             }
         }
 
-        // Guardar progreso
         reserva.idPasoActual = idSiguiente;
 
-        // Confirmar reserva si llegamos al paso final
         if (idSiguiente === 'confirmar_reserva') {
             reserva.estado = 'confirmada';
 
-            // ASIGNACIÓN DE HABITACIONES FÍSICAS
             try {
-                // 1. Obtener inventario detallado (IDs de habitaciones libres)
                 const inicio = reserva.fechaInicio;
                 const fin = reserva.fechaFin;
 
-                // Habitaciones físicas activas
-                const habitacionesActivas = await Habitacion.find({ estado: 'disponible' }).lean();
+                const habitacionesActivas = await Habitacion.find({
+                    estado: { $in: ['disponible', 'ocupada'] }
+                }).lean();
 
-                // Reservas solapadas
                 const reservasSolapadas = await Reserva.find({
                     estado: 'confirmada',
                     $or: [
@@ -696,7 +631,6 @@ exports.manejarMensaje = async (req, res) => {
                 });
 
                 const asignadas = [];
-                // Por cada tipo en la reserva, buscar N habitaciones libres
                 for (const habInfo of (reserva.habitacionesElegidas || [])) {
                     const disponiblesDeEsteTipo = habitacionesActivas.filter(h =>
                         h.tipo.toString() === habInfo.tipo.toString() &&
@@ -711,15 +645,22 @@ exports.manejarMensaje = async (req, res) => {
                     }
                 }
                 reserva.habitacionesAsignadas = asignadas;
-                console.log(`Habitaciones asignadas a reserva ${reserva._id}:`, asignadas);
+
+                if (asignadas.length > 0) {
+                    await Habitacion.updateMany(
+                        { _id: { $in: asignadas } },
+                        { $set: { estado: 'ocupada' } }
+                    );
+                }
+
+                console.log(`Habitaciones asignadas y bloqueadas para reserva ${reserva._id}:`, asignadas);
             } catch (err) {
-                console.error('Error al asignar habitaciones:', err);
+                console.error('Error al asignar/bloquear habitaciones:', err);
             }
         }
 
         await reserva.save();
 
-        // Obtener siguiente paso
         const pasoSiguiente = await ChatPaso.findOne({ id: idSiguiente });
         if (!pasoSiguiente) {
             return res.status(400).json(respuestaChat({
@@ -730,30 +671,24 @@ exports.manejarMensaje = async (req, res) => {
             }));
         }
 
-        // Inyectar contenido dinámico
         let mensajeRespuesta = pasoSiguiente.mensaje;
 
-        // Reemplazar variables en mensaje
         const totalPersonas = (reserva.numAdultos || 0) + (reserva.numNinos || 0);
         const noches = reserva.fechaInicio && reserva.fechaFin ?
             Math.ceil((reserva.fechaFin - reserva.fechaInicio) / (1000 * 60 * 60 * 24)) : 0;
 
-        // Calcular precios
         let precioTotal = 0;
         let precioHabitacion = 0;
         let costoAlimentacion = 0;
         let costoMascotas = 0;
         let nombreHabitacion = 'No seleccionada';
 
-        // Obtener habitaciones seleccionadas (priorizar habitacionesElegidas sobre habitacionElegida)
         if (reserva.habitacionesElegidas && reserva.habitacionesElegidas.length > 0) {
-            // Calcular precio total de todas las habitaciones en la combinación
             for (const habInfo of reserva.habitacionesElegidas) {
                 precioHabitacion += habInfo.precioBase * habInfo.cantidad;
             }
             precioTotal += precioHabitacion * noches;
 
-            // Crear descripción de la combinación de habitaciones
             if (reserva.habitacionesElegidas.length === 1) {
                 const hab = reserva.habitacionesElegidas[0];
                 nombreHabitacion = hab.cantidad > 1
@@ -765,7 +700,6 @@ exports.manejarMensaje = async (req, res) => {
                     .join(' + ');
             }
         } else if (reserva.habitacionElegida) {
-            // Fallback para compatibilidad con código anterior (una sola habitación)
             const habitacionSeleccionada = await TipoHabitacion.findById(reserva.habitacionElegida).lean();
 
             if (habitacionSeleccionada) {
@@ -775,11 +709,10 @@ exports.manejarMensaje = async (req, res) => {
             }
         }
 
-        // Calcular costo de alimentación
         if (reserva.planAlimentacion) {
             switch (reserva.planAlimentacion) {
                 case 'solo_desayuno':
-                    costoAlimentacion = 0; // Ya incluido
+                    costoAlimentacion = 0;
                     break;
                 case 'desayuno_almuerzo':
                     costoAlimentacion = 25000 * totalPersonas * noches;
@@ -802,24 +735,32 @@ exports.manejarMensaje = async (req, res) => {
 
         // Nombres descriptivos para planes
         const nombresPlanes = {
-            'solo_desayuno': 'Solo desayuno (incluido)',
-            'desayuno_almuerzo': 'Desayuno + Almuerzo',
-            'completo': 'Desayuno + Almuerzo + Cena',
+            'solo_desayuno': 'Solo desayuno (Lo esencial) ☕',
+            'desayuno_almuerzo': 'Desayuno + Almuerzo (¡Ideal para recorrer!) 🍛',
+            'completo': 'Plan Gourmet Completo ⭐',
             'ninguno': 'Sin alimentación'
         };
+
+        // Obtener números de habitaciones físicas si ya fueron asignadas
+        let numerosHabitacionesStr = 'Pendiente de asignación';
+        if (reserva.habitacionesAsignadas && reserva.habitacionesAsignadas.length > 0) {
+            const habsFisicas = await Habitacion.find({ _id: { $in: reserva.habitacionesAsignadas } }).lean();
+            numerosHabitacionesStr = habsFisicas.map(h => h.numero).sort().join(', ');
+        }
 
         mensajeRespuesta = mensajeRespuesta
             .replace(/{startDate}/g, reserva.fechaInicio ? reserva.fechaInicio.toLocaleDateString('es-ES') : '')
             .replace(/{endDate}/g, reserva.fechaFin ? reserva.fechaFin.toLocaleDateString('es-ES') : '')
             .replace(/{totalPeople}/g, totalPersonas)
             .replace(/{peopleBreakdown}/g, `${reserva.numAdultos || 0} adultos, ${reserva.numNinos || 0} niños`)
-            .replace(/{hasPetsStatus}/g, reserva.tieneMascotas ? `Sí (${reserva.numMascotas || 0})` : 'No')
+            .replace(/{hasPetsStatus}/g, reserva.tieneMascotas ? `Sí (${reserva.numMascotas || 0} 🐾)` : 'No')
             .replace(/{nombreUsuario}/g, reserva.nombreUsuario || '')
             .replace(/{telefonoUsuario}/g, reserva.telefonoUsuario || '')
             .replace(/{correoUsuario}/g, reserva.correoUsuario || '')
             .replace(/{paymentMethod}/g, reserva.metodoPago || 'No seleccionado')
             .replace(/{totalPrice}/g, `$${precioTotal.toLocaleString()}`)
             .replace(/{roomType}/g, nombreHabitacion)
+            .replace(/{roomNumbers}/g, numerosHabitacionesStr)
             .replace(/{roomPricePerNight}/g, `$${precioHabitacion.toLocaleString()}`)
             .replace(/{roomTotal}/g, `$${(precioHabitacion * noches * (reserva.numHabitaciones || 1)).toLocaleString()}`)
             .replace(/{noches}/g, noches)
@@ -827,7 +768,7 @@ exports.manejarMensaje = async (req, res) => {
             .replace(/{mealPlanCost}/g, `$${costoAlimentacion.toLocaleString()}`)
             .replace(/{petCost}/g, `$${costoMascotas.toLocaleString()}`)
             .replace(/{selectedOptionName}/g, nombreHabitacion)
-            .replace(/{additionalServices}/g, reserva.tieneMascotas ? 'Área especial para mascotas' : 'Servicios estándar');
+            .replace(/{additionalServices}/g, reserva.tieneMascotas ? 'Área especial para mascotas 🐾' : 'Servicios estándar');
 
         // Procesar opciones dinámicas
         if (pasoSiguiente.tipo === 'dynamic_options') {
@@ -886,7 +827,9 @@ exports.manejarMensaje = async (req, res) => {
             const comb = combinaciones[indiceActual];
             const precioTotalNoches = comb.precioTotal * noches;
 
-            let mensajeOpciones = `✨ **Opción ${indiceActual + 1} de ${totalOpciones}**\n\n`;
+            let mensajeOpciones = `✨ **He encontrado esta opción ideal para ti** basándome en tu búsqueda.\n\n`;
+
+            mensajeOpciones += `✨ **Opción ${indiceActual + 1} de ${totalOpciones}**\n\n`;
 
             if (comb.esMixta) {
                 mensajeOpciones += `🔀 **COMBINACIÓN MIXTA**\n`;
@@ -920,7 +863,7 @@ exports.manejarMensaje = async (req, res) => {
             mensajeOpciones += `\n💰 Precio/noche: $${comb.precioTotal.toLocaleString()}\n`;
             mensajeOpciones += `📅 Total (${noches} noches): $${precioTotalNoches.toLocaleString()}\n\n`;
 
-            mensajeOpciones += `👇 **¿Te gustaría reservar esta opción ideal?**`;
+            mensajeOpciones += `👇 **¿Te gustaría asegurar esta estancia única ahora?**`;
 
             // Construir botones de navegación
             const opciones = [];

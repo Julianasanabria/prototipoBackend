@@ -4,7 +4,6 @@ const { validateChatMessage, validateResetChat } = require('../middleware/valida
 
 const { manejarMensaje, reiniciarChat } = require('../controllers/chatController');
 
-// Ruta base para verificar que el router de chat funciona
 router.get('/', (req, res) => {
     res.json({
         mensaje: 'API de Chat activa y funcionando',

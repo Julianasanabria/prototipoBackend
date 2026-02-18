@@ -23,7 +23,6 @@ const EsquemaHabitacion = new mongoose.Schema({
     timestamps: true
 });
 
-// Índice para búsquedas por tipo y estado
 EsquemaHabitacion.index({ tipo: 1, estado: 1 });
 
 module.exports = mongoose.model('Habitacion', EsquemaHabitacion);
