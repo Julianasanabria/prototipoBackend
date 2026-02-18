@@ -28,8 +28,9 @@ app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
         const cleanOrigin = origin.trim().replace(/\/$/, "");
+        const isVercel = /\.vercel\.app$/.test(cleanOrigin);
 
-        if (allowedOrigins.includes(cleanOrigin) || process.env.NODE_ENV === 'development') {
+        if (allowedOrigins.includes(cleanOrigin) || isVercel || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
             console.log('Bloqueado por CORS:', origin);
