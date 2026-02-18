@@ -47,11 +47,30 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/chat', require('./routes/chatRoutes'));
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+    const mongoose = require('mongoose');
+    const ChatPaso = require('./models/ChatPaso');
+
+    let dbStatus = 'Disconnected';
+    let pasosCount = 0;
+
+    if (mongoose.connection.readyState === 1) {
+        dbStatus = 'Connected';
+        try {
+            pasosCount = await ChatPaso.countDocuments();
+        } catch (e) {
+            dbStatus = 'Error counting documents';
+        }
+    }
+
     res.json({
         status: 'OK',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        database: {
+            status: dbStatus,
+            pasosCount: pasosCount,
+            dbName: mongoose.connection.name
+        },
+        timestamp: new Date().toISOString()
     });
 });
 
