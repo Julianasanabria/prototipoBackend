@@ -10,7 +10,8 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const semillaDatos = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
-        console.log('MongoDB conectado');
+        console.log(`MongoDB conectado: ${mongoose.connection.host}`);
+        console.log(`Base de datos activa: ${mongoose.connection.name}`);
 
         await ChatPaso.deleteMany({});
         await TipoHabitacion.deleteMany({});
